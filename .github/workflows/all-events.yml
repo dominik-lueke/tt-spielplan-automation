@@ -1,0 +1,21 @@
+name: all-events
+
+on:
+  schedule:
+    - cron: "15 2 * * *"
+    - cron: "15 8 * * *"
+    - cron: "15 14 * * *"
+    - cron: "15 20 * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger-netlify-function:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call Netlify function with API key
+        run: |
+          echo "Calling Netlify function..."
+          curl -s -f -w "\nHTTP status: %{http_code}\n" \
+            -H "x-api-key: ${{ secrets.NETLIFY_API_KEY }}" \
+            "https://${{ secrets.APP_HOST }}/.netlify/functions/fetch-and-parse-all-events?verein=${{ secrets.VEREIN }}"

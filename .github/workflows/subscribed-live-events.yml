@@ -1,0 +1,18 @@
+name: subscribed-live-events
+
+on:
+  schedule:
+    - cron: "0 0 1 1 *"
+  workflow_dispatch:
+
+jobs:
+  trigger-netlify-function:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call Netlify function with API key
+        run: |
+          echo "Calling Netlify function..."
+          curl -s -f -w "\nHTTP status: %{http_code}\n" \
+            -H "x-api-key: ${{ secrets.NETLIFY_API_KEY }}" \
+            "https://${{ secrets.APP_HOST }}/.netlify/functions/update-ergebnisse-for-subscribed-live-events"

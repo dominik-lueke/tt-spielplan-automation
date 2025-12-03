@@ -1,0 +1,68 @@
+name: update-schedules
+
+on:
+  schedule:
+    - cron: "15 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.WORKFLOW_PAT }}
+
+      - name: Fetch JSON
+        id: fetch
+        run: |
+          JSON=$(curl -s -H "x-api-key: ${{ secrets.NETLIFY_API_KEY }}" "https://${{ secrets.APP_HOST }}/.netlify/functions/get-todays-cron")
+          echo "json=$JSON" >> $GITHUB_OUTPUT
+
+      - name: Extract next schedule
+        id: parse
+        run: |
+          # Example: JSON contains { "regularcron": "15 * * * *", "livecron": "15 * * * *", "previewcron": "0 10 * * *" }
+          REGULARCRON=$(echo '${{ steps.fetch.outputs.json }}' | jq -r '.regularcron')
+          echo "regularcron=$REGULARCRON" >> $GITHUB_OUTPUT
+          LIVECRON=$(echo '${{ steps.fetch.outputs.json }}' | jq -r '.livecron')
+          echo "livecron=$LIVECRON" >> $GITHUB_OUTPUT
+          PREVIEWCRON=$(echo '${{ steps.fetch.outputs.json }}' | jq -r '.previewcron')
+          echo "previewcron=$PREVIEWCRON" >> $GITHUB_OUTPUT
+
+      - name: Update workflow file
+        run: |
+          FILE1=".github/workflows/results.yml"
+          NEW_CRON1="${{ steps.parse.outputs.regularcron }}"
+          # Replace the cron line in the target workflow
+          sed -i "s|cron: \".*\"|cron: \"$NEW_CRON1\"|" "$FILE1"
+
+          FILE2=".github/workflows/subscribed-live-events.yml"
+          NEW_CRON2="${{ steps.parse.outputs.livecron }}"
+          # Replace the cron line in the target workflow
+          sed -i "s|cron: \".*\"|cron: \"$NEW_CRON2\"|" "$FILE2"
+
+          FILE3=".github/workflows/notify-about-todays-events.yml"
+          NEW_CRON3="${{ steps.parse.outputs.previewcron }}"
+          # Replace the cron line in the target workflow
+          sed -i "s|cron: \".*\"|cron: \"$NEW_CRON3\"|" "$FILE3"
+          
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add .github/workflows/results.yml
+          git add .github/workflows/subscribed-live-events.yml
+          git add .github/workflows/notify-about-todays-events.yml
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update schedules to regular:${{ steps.parse.outputs.regularcron }}, live:${{ steps.parse.outputs.livecron }}, and preview ${{ steps.parse.outputs.previewcron }}"
+            git push
+          fi
