@@ -1,0 +1,39 @@
+name: results
+
+on:
+  schedule:
+    - cron: "0 0 1 1 *"
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to run against"
+        required: true
+        default: "preview"
+        type: choice
+        options:
+          - prod
+          - preview
+        
+  
+
+jobs:
+  trigger-netlify-function:
+    runs-on: ubuntu-latest
+
+    # Map to GitHub environments: prod or preview
+    # Only run schedules for prod environment
+    environment: ${{ github.event.inputs.environment || 'prod' }}
+
+    steps:
+      - name: Set app_host from environment
+        run: |
+          echo "APP_HOST=${{ vars.APP_HOST }}" >> $GITHUB_ENV
+
+      - name: Call Netlify function with API key
+        if: ${{ github.event_name == 'workflow_dispatch' || github.environment == 'prod' }}
+        run: |
+          echo "Calling Netlify function on $APP_HOST..."
+          curl -s -f -w "\nHTTP status: %{http_code}\n" \
+            -H "x-api-key: ${{ secrets.NETLIFY_API_KEY }}" \
+            "https://${APP_HOST}/.netlify/functions/fetch-and-parse-results?verein=${{ vars.VEREIN }}"
